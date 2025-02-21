@@ -6,9 +6,9 @@ const app = express();
 const port = 3000;
 
 // 1. Credenciales de tu aplicación
-const client_id = '206a7ab800e94c2a952f7a64c28db11d';       // <--- pega aquí tu Client ID
-const client_secret = '3f39840a78b54b488978136d901a65e6'; // <--- pega aquí tu Client Secret
-const redirect_uri = 'http://localhost:3000/callback'; // Debe coincidir con lo de tu Dashboard
+const client_id = '206a7ab800e94c2a952f7a64c28db11d';       
+const client_secret = '3f39840a78b54b488978136d901a65e6'; 
+const redirect_uri = 'http://localhost:3000/callback'; 
 
 app.use(express.static('public'));
 

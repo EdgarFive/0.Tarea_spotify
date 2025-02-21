@@ -2,22 +2,26 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <title>Spotify Top Tracks - Cola de Canciones</title>
+  <title>Spotify Top Tracks - Cola de Prioridad</title>
   <style>
     body { font-family: Arial, sans-serif; margin: 20px; }
     h1 { color: #1DB954; }
     button { margin-right: 10px; padding: 10px; }
+    #errorMessage { color: red; font-weight: bold; }
   </style>
 </head>
 <body>
-  <h1>Spotify Top Tracks - Cola de Canciones</h1>
+  <h1>Spotify Top Tracks - Cola de Prioridad</h1>
   <div id="loginMessage"></div>
   <button id="fetchTracks">Obtener Top 10 Canciones</button>
   <button id="playNext">Reproducir Siguiente Canción</button>
   <div id="queueDisplay"></div>
+  <div id="errorMessage"></div>
 
   <script>
-    // Función para obtener parámetros de la URL
+    // ================================
+    // 1. Manejo del Token y la URL
+    // ================================
     function getQueryVariable(variable) {
       var query = window.location.search.substring(1);
       var vars = query.split('&');
@@ -28,48 +32,64 @@
       return null;
     }
 
-    // Obtenemos el token de la query string (si existe)
     const SPOTIFY_TOKEN = getQueryVariable("access_token");
-
-    // Si no se encuentra el token, mostramos un mensaje con enlace para iniciar sesión
     if (!SPOTIFY_TOKEN) {
-      document.getElementById("loginMessage").innerHTML = `<p>No estás autenticado. <a href="/login">Inicia sesión con Spotify</a></p>`;
+      document.getElementById("loginMessage").innerHTML = `
+        <p>No estás autenticado. 
+        <a href="/login">Inicia sesión con Spotify</a></p>
+      `;
     }
 
-    // URL del endpoint de Spotify para obtener Top Tracks
-    const API_URL = "https://api.spotify.com/v1/me/top/tracks?limit=10";
-
     // ================================
-    // IMPLEMENTACIÓN DE LA COLA (FIFO)
+    // 2. Cola de Prioridad
     // ================================
-    class Queue {
+    class PriorityQueue {
       constructor() {
         this.items = [];
       }
-      // Agrega una canción al final de la cola.
-      enqueue(cancion) {
-        this.items.push(cancion);
+
+      enqueue(cancion, prioridad) {
+        const newItem = { cancion, prioridad };
+
+        if (this.isEmpty()) {
+          this.items.push(newItem);
+        } else {
+          let agregado = false;
+          for (let i = 0; i < this.items.length; i++) {
+            // Menor número = mayor prioridad
+            if (prioridad < this.items[i].prioridad) {
+              this.items.splice(i, 0, newItem);
+              agregado = true;
+              break;
+            }
+          }
+          if (!agregado) {
+            this.items.push(newItem);
+          }
+        }
       }
-      // Elimina y devuelve la canción más antigua de la cola.
+
       dequeue() {
         return this.items.shift();
       }
-      // Devuelve el contenido actual de la cola.
+
       mostrar() {
         return this.items;
       }
-      // Verifica si la cola está vacía.
+
       isEmpty() {
         return this.items.length === 0;
       }
     }
 
-    // Instancia de la cola
-    let songQueue = new Queue();
+    // Instancia de la cola de prioridad
+    let songQueue = new PriorityQueue();
 
     // ================================
-    // OBTENER TOP 10 CANCIONES DESDE SPOTIFY
+    // 3. Spotify API
     // ================================
+    const API_URL = "https://api.spotify.com/v1/me/top/tracks?limit=10&time_range=long_term";
+
     async function fetchTopTracks() {
       if (!SPOTIFY_TOKEN) {
         alert("Primero debes autenticarte.");
@@ -81,54 +101,84 @@
             'Authorization': `Bearer ${SPOTIFY_TOKEN}`
           }
         });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error ? errorData.error.message : response.statusText);
+        }
+
         const data = await response.json();
-        // Se asume que data.items es el array con las canciones
-        data.items.forEach(track => {
-          // Almacenamos la información mínima de la canción: nombre y enlace a Spotify.
-          const cancion = {
-            titulo: track.name,
-            enlace: track.external_urls.spotify
-          };
-          songQueue.enqueue(cancion);
-        });
-        updateQueueDisplay();
+        console.log("Respuesta de Spotify:", data);
+
+        // Limpiamos la cola antes de llenarla
+        songQueue = new PriorityQueue();
+
+        if (data.items && data.items.length > 0) {
+          data.items.forEach(track => {
+            const cancion = {
+              titulo: track.name,
+              enlace: track.external_urls.spotify
+            };
+            
+            const prioridad = 100 - track.popularity;
+
+            // Insertamos en la cola de prioridad
+            songQueue.enqueue(cancion, prioridad);
+          });
+          updateQueueDisplay();
+        } else {
+          document.getElementById("errorMessage").textContent = 
+            "No se encontraron suficientes canciones en tu Top de Spotify.";
+        }
       } catch (error) {
         console.error("Error al obtener las canciones:", error);
+        document.getElementById("errorMessage").textContent = 
+          "Ocurrió un error al obtener las canciones: " + error.message;
       }
     }
 
-    // Actualiza la visualización de la cola en la interfaz.
+    // ================================
+    // 4. Mostrar la Cola de Prioridad
+    // ================================
     function updateQueueDisplay() {
+      document.getElementById("errorMessage").textContent = "";
       const display = document.getElementById("queueDisplay");
-      display.innerHTML = "<h2>Cola de Canciones:</h2>";
+      display.innerHTML = "<h2>Cola de Canciones (Mayor prioridad primero):</h2>";
       if (songQueue.isEmpty()) {
         display.innerHTML += "<p>La cola está vacía.</p>";
         return;
       }
       const list = document.createElement("ul");
-      songQueue.mostrar().forEach((cancion, index) => {
-        const item = document.createElement("li");
-        item.innerHTML = `${index + 1}. ${cancion.titulo} - <a href="${cancion.enlace}" target="_blank">Escuchar</a>`;
-        list.appendChild(item);
+      songQueue.mostrar().forEach((item, index) => {
+        const { titulo, enlace } = item.cancion;
+        const prioridad = item.prioridad;
+        const li = document.createElement("li");
+        li.innerHTML = `
+          ${index + 1}. <strong>${titulo}</strong> 
+          (Prioridad: ${prioridad}) 
+          - <a href="${enlace}" target="_blank">Escuchar</a>
+        `;
+        list.appendChild(li);
       });
       display.appendChild(list);
     }
 
     // ================================
-    // SIMULACIÓN DE REPRODUCCIÓN (FIFO)
+    // 5. Reproducción Prioritaria
     // ================================
     function playNextSong() {
       if (songQueue.isEmpty()) {
         alert("No quedan canciones en la cola.");
         return;
       }
-      const nextSong = songQueue.dequeue();
-      alert("Reproduciendo: " + nextSong.titulo);
+      // Sacamos la canción con mayor prioridad (la primera en la lista)
+      const nextItem = songQueue.dequeue();
+      alert("Reproduciendo: " + nextItem.cancion.titulo + " (Prioridad: " + nextItem.prioridad + ")");
       updateQueueDisplay();
     }
 
     // ================================
-    // EVENTOS DE INTERFAZ
+    // 6. Eventos de la Interfaz
     // ================================
     document.getElementById("fetchTracks").addEventListener("click", fetchTopTracks);
     document.getElementById("playNext").addEventListener("click", playNextSong);
