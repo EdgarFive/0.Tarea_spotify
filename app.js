@@ -5,10 +5,12 @@ const querystring = require('querystring');
 const app = express();
 const port = 3000;
 
-// 1. Credenciales de tu aplicación
-const client_id = '206a7ab800e94c2a952f7a64c28db11d';       
-const client_secret = '3f39840a78b54b488978136d901a65e6'; 
-const redirect_uri = 'http://localhost:3000/callback'; 
+require('dotenv').config();
+
+// 1. Credenciales de aplicación
+const client_id = process.env.CLIENT_ID;
+const client_secret = process.env.CLIENT_SECRET; 
+const redirect_uri = process.env.REDIRECT_URI;
 
 app.use(express.static('public'));
 
@@ -30,7 +32,7 @@ app.get('/login', (req, res) => {
 
 // 3. Ruta de callback
 app.get('/callback', async (req, res) => {
-  // Spotify enviará un "code" como query param, ej: /callback?code=...
+  // Spotify enviará un "code" como query param
   const code = req.query.code || null;
 
   // Intercambiamos el "code" por un token de acceso
@@ -77,7 +79,7 @@ app.get('/', (req, res) => {
     `);
   }
 
-  // Si sí hay token, lo mostramos en pantalla (en la vida real lo usaríamos en la app)
+  // Si sí hay token, lo mostramos en pantalla
   res.send(`
     <h1>Autenticación exitosa</h1>
     <p>Access Token: ${access_token}</p>
